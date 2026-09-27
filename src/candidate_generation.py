@@ -40,24 +40,14 @@ def _build_token_frequency(values):
 
 def _build_indexes(df):
     """
-    Build token and exact-value indexes for a source.
+    Build token and exact-value indexes in a single pass.
 
-    Returns:
-        name_frequency
-        address_frequency
-        name_index
-        address_index
-        exact_name_index
-        exact_address_index
+    This preserves the existing blocking behavior while avoiding
+    separate full passes for token frequencies and token indexes.
     """
 
-    name_frequency = _build_token_frequency(
-        df["name_norm"]
-    )
-
-    address_frequency = _build_token_frequency(
-        df["address_norm"]
-    )
+    name_frequency = Counter()
+    address_frequency = Counter()
 
     name_index = defaultdict(list)
     address_index = defaultdict(list)
@@ -68,24 +58,45 @@ def _build_indexes(df):
     for row_idx, row in enumerate(
         df.itertuples(index=False)
     ):
-        name_tokens = _tokenize(row.name_norm)
-        address_tokens = _tokenize(row.address_norm)
+        # -----------------------------
+        # Name
+        # -----------------------------
+        name_norm = row.name_norm
 
-        for token in name_tokens:
-            name_index[token].append(row_idx)
+        if name_norm:
+            name_tokens = _tokenize(name_norm)
 
-        for token in address_tokens:
-            address_index[token].append(row_idx)
+            # Frequency: once per record
+            name_frequency.update(name_tokens)
 
-        if row.name_norm:
-            exact_name_index[
-                row.name_norm
-            ].append(row_idx)
+            # Token -> row index
+            for token in name_tokens:
+                name_index[token].append(row_idx)
 
-        if row.address_norm:
-            exact_address_index[
-                row.address_norm
-            ].append(row_idx)
+            # Exact normalized name
+            exact_name_index[name_norm].append(
+                row_idx
+            )
+
+        # -----------------------------
+        # Address
+        # -----------------------------
+        address_norm = row.address_norm
+
+        if address_norm:
+            address_tokens = _tokenize(address_norm)
+
+            # Frequency: once per record
+            address_frequency.update(address_tokens)
+
+            # Token -> row index
+            for token in address_tokens:
+                address_index[token].append(row_idx)
+
+            # Exact normalized address
+            exact_address_index[address_norm].append(
+                row_idx
+            )
 
     return (
         name_frequency,
